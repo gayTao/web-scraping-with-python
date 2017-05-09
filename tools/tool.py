@@ -3,6 +3,8 @@ import whois
 import urllib2
 import itertools
 import re
+import urlparse
+import robotparser
 
 #识别网站所用技术
 def parsebuilt(url):
@@ -36,7 +38,7 @@ def crawl_sitemap(url) :
     links = re.findall('<loc>(. * ? ) < / l o c >' , sitemap)
     # download each l i n k
     for link in links :
-        html = download (link )
+        html = download (link)
 
 #遍历ID爬取
 def crawl_ID(url_base):
@@ -48,10 +50,51 @@ def crawl_ID(url_base):
         else:
             pass
 
-#爬取符合正则表达式的
+
+#爬取符合正则表达式的网页
 def link_crawler(seed_url,link_regex):
     crawl_queue = {seed_url}
+    #keep track which URL'S have seen before
+    seen = set(crawl_queue)
     while crawl_queue:
         url = crawl_queue.pop()
         html = download(url)
-        for link in get_links()
+        for link in get_links(html):
+            #check if link matches expected regex
+            if re.match(link_regex,link):
+                #form absolute link
+                link = urlparse.urljoin(seed_url,link)
+                #check if have already seen this link
+                if link not in seen:
+                    seen.add(link)
+                    crawl_queue.append(link)
+
+def get_links(html):
+    """return a list of links from html
+    """
+    #a regular expression to extract all links from the webpage
+    webpage_regex = re.compile('<a [^>] +href＝["\'](.*?)["\']',re.IGNORECASE)
+    return webpage_regex.findall(html)
+
+#添加解析robots.txt协议,下载限速的link_crawler
+def link_crawler(seed_url,link_regex,user_agent = 'wswp'):
+    rp = robotparser.RobotFileParser()
+    crawl_queue = {seed_url}
+    #keep track which URL'S have seen before
+    seen = set(crawl_queue)
+    while crawl_queue:
+        url = crawl_queue.pop()
+        #check url passes robots.txt restrictions
+        if rp.can_fetch(user_agent,url):
+            html = download(url)
+            for link in get_links(html):
+                #check if link matches expected regex
+                if re.match(link_regex,link):
+                    #form absolute link
+                    link = urlparse.urljoin(seed_url,link)
+                    #check if have already seen this link
+                    if link not in seen:
+                        seen.add(link)
+                        crawl_queue.append(link)
+        else:
+            print 'Blocked by robots.txt',url
